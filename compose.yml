@@ -1,0 +1,150 @@
+version: '3'
+
+services:
+  
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmqctl status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    
+  users-postgres-database:
+    container_name: users-service-db
+    image: postgres:13.4-alpine
+    environment:
+      POSTGRES_USER: ${DEV_USERS_DB_USERNAME}
+      POSTGRES_PASSWORD: ${DEV_USERS_DB_PASSWORD}
+      POSTGRES_DB: ${DEV_USERS_DB_NAME}
+      POSTGRES_HOST: ${DEV_USERS_DB_HOST}
+      POSTGRES_PORT: ${DEV_USERS_DB_PORT}
+    restart: always
+    ports:
+      - 5432:5432
+    volumes:
+      - users-pgdata:/var/lib/postgresql/data
+  
+  recipes-postgres-database:
+    container_name: recipes-service-db
+    image: postgres:17.2-alpine3.21
+    environment:
+      POSTGRES_USER: ${DEV_RECIPES_DB_USERNAME}
+      POSTGRES_PASSWORD: ${DEV_RECIPES_DB_PASSWORD}
+      POSTGRES_DB: ${DEV_RECIPES_DB_NAME}
+      POSTGRES_HOST: ${DEV_RECIPES_DB_HOST}
+      # POSTGRES_PORT: ${DEV_RECIPES_DB_PORT}
+    restart: always
+    ports:
+      - "5433:5432"
+    volumes:
+      - recipes-pgdata:/var/lib/postgresql/data
+  
+  recommendations-neo4j-aura-db:
+    container_name: recommendations-neo4j-aura-db
+    image: neo4j:latest
+    volumes:
+      - ./recommendations-neo4j/data:/data
+      - ./recommendations-neo4j/logs:/logs
+      - ./recommendations-neo4j/plugins:/plugins
+      - ./recommendations-neo4j/conf:/conf
+    environment:
+      NEO4J_AUTH: neo4j/${DEV_NEO_4J_AURA_DB_PASSWORD}
+      dbms.connector.bolt.listen_address: 0.0.0.0:7687
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    restart: always
+
+  
+  users-service:
+    build:
+      context: Users-Service/
+    container_name: users-service
+    restart: on-failure
+    depends_on: 
+      rabbitmq:
+        condition: service_healthy
+    links:
+      - rabbitmq
+    env_file:
+      - Users-Service/.env
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /code/
+    volumes: 
+      - ./Users-Service:/code
+    ports:
+      - 8000:8000
+  
+  recipes-service:
+    build:
+      context: Recipes-Service/
+    container_name: recipes-service
+    restart: on-failure
+    depends_on: 
+      rabbitmq:
+        condition: service_healthy
+    links:
+      - rabbitmq
+    env_file:
+      - Recipes-Service/.env
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /code/
+    volumes:
+      - ./Recipes-Service:/code
+    ports:
+      - 2000:2000
+  
+  recommendations-service:
+    build:
+      context: Recommendations-Service/
+    container_name: recommendations-service
+    restart: on-failure
+    depends_on: 
+      rabbitmq:
+        condition: service_healthy
+    links:
+      - rabbitmq
+    env_file:
+      - Recommendations-Service/.env
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /code/
+    volumes:
+      - ./Recommendations-Service:/code
+    ports:
+      - 4000:4000
+      
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    restart: always
+    ports:
+      - "8888:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+
+volumes:
+  users-pgdata:
+  recipes-pgdata:
+  # recommendations-neo4j:
+  pgadmin-data:
+  rabbitmq_data:
