@@ -52,7 +52,7 @@ Brief explanation of the architecture:
 
 ### 1. Clone this repo
 ```bash
-git clone <project>
+git clone https://github.com/Princeigwe/NutraNova.git
 cd NutraNova
 ```
 
